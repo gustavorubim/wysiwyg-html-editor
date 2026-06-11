@@ -2,7 +2,7 @@
   "name": "cosmic-canvas",
   "displayName": "Cosmic Canvas",
   "description": "A WYSIWYG custom editor for polishing HTML documents.",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "publisher": "local",
   "private": true,
   "license": "MIT",
@@ -12,7 +12,7 @@
   },
   "type": "module",
   "main": "./out/extension.cjs",
-  "icon": "public/app-icon-space-192.png",
+  "icon": "resources/icon.png",
   "engines": {
     "vscode": "^1.90.0"
   },
@@ -27,7 +27,11 @@
     "commands": [
       {
         "command": "cosmicCanvas.openAsEditor",
-        "title": "Cosmic Canvas: Open Current HTML File"
+        "title": "Cosmic Canvas: Open Current HTML File",
+        "icon": {
+          "light": "resources/cosmic-canvas-command.svg",
+          "dark": "resources/cosmic-canvas-command.svg"
+        }
       }
     ],
     "customEditors": [

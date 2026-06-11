@@ -12,7 +12,7 @@ vite.config.ts
 vitest.config.ts
 tsconfig.json
 tsconfig.extension.json
-public/stress-fixtures/**
+public/**
 dist/**/*.map
 
 dist/**
@@ -26,4 +26,3 @@ dist/**
 !out/**
 !README.md
 !package.json
-!public/app-icon-space-192.png

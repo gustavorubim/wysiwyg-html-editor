@@ -193,10 +193,10 @@ Cosmic Canvas can also run as a VS Code custom editor for `.html` and `.htm` fil
 npm run vsix
 ```
 
-The packaged extension is written to `cosmic-canvas-0.1.0.vsix`. Install it with:
+The packaged extension is written to `cosmic-canvas-0.1.1.vsix`. Install it with:
 
 ```powershell
-code --install-extension .\cosmic-canvas-0.1.0.vsix
+code --install-extension .\cosmic-canvas-0.1.1.vsix
 ```
 
 After installation, open an HTML file with **Open With... > Cosmic Canvas** or run
