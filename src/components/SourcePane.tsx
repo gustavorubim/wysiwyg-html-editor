@@ -10,9 +10,11 @@ export type SourcePaneProps = {
   onChange: (value: string) => void;
   visible: boolean;
   onShow: () => void;
+  dirty: boolean;
+  onApply: () => void;
 };
 
-export function SourcePane({ value, onChange, visible, onShow }: SourcePaneProps) {
+export function SourcePane({ value, onChange, visible, onShow, dirty, onApply }: SourcePaneProps) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const viewRef = useRef<EditorView | null>(null);
 
@@ -78,6 +80,7 @@ export function SourcePane({ value, onChange, visible, onShow }: SourcePaneProps
         <button aria-label="Show HTML source" onClick={onShow} title="Show HTML source" type="button">
           <PanelLeftOpen size={18} aria-hidden="true" />
           <span>HTML</span>
+          {dirty ? <i className="rail-dot" title="Source modified - not applied" /> : null}
         </button>
         <span>{value.length.toLocaleString()}</span>
       </aside>
@@ -88,7 +91,19 @@ export function SourcePane({ value, onChange, visible, onShow }: SourcePaneProps
     <aside className="source-pane" aria-label="HTML source">
       <div className="pane-title">
         <span>HTML source</span>
-        <span>{value.length.toLocaleString()} chars</span>
+        <span className="source-meta">
+          {dirty ? (
+            <button
+              className="apply-chip"
+              onClick={onApply}
+              title="Render the edited source in the canvas (Ctrl+Enter)"
+              type="button"
+            >
+              Modified - Apply
+            </button>
+          ) : null}
+          {value.length.toLocaleString()} chars
+        </span>
       </div>
       <div
         ref={hostRef}

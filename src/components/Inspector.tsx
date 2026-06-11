@@ -2,7 +2,6 @@ import {
   AlignCenter,
   AlignLeft,
   AlignRight,
-  ChevronRight,
   CopyPlus,
   CornerLeftUp,
   ImageUp,
@@ -69,7 +68,6 @@ type InspectorProps = {
   selected: SelectedElement;
   onText: (text: string) => void;
   onStyle: (styles: Record<string, string>) => void;
-  onSelectAncestor: (id: string) => void;
   onSelectParent: () => void;
   onAddClass: (name: string) => void;
   onRemoveClass: (name: string) => void;
@@ -83,7 +81,6 @@ export function Inspector({
   selected,
   onText,
   onStyle,
-  onSelectAncestor,
   onSelectParent,
   onAddClass,
   onRemoveClass,
@@ -127,194 +124,188 @@ export function Inspector({
 
   return (
     <div className="inspector-body">
-      <nav className="breadcrumb" aria-label="Element path">
-        {selected.ancestors.map((node, index) => (
-          <span key={node.id}>
-            {index > 0 ? <ChevronRight size={12} aria-hidden="true" /> : null}
-            <button
-              className={node.id === selected.id ? "is-current" : ""}
-              onClick={() => onSelectAncestor(node.id)}
-              type="button"
-            >
-              {node.label}
-            </button>
-          </span>
-        ))}
-      </nav>
+      <details className="inspector-group" open>
+        <summary>Content</summary>
+        <label>
+          Text
+          {selected.editableText ? (
+            <textarea
+              className="text-control"
+              value={selected.text}
+              onChange={(event) => onText(event.target.value)}
+            />
+          ) : (
+            <div className="field-note">
+              This element wraps {selected.childElementCount} child element
+              {selected.childElementCount === 1 ? "" : "s"}. Select a leaf element to edit its text,
+              or use the breadcrumb under the canvas to move around.
+            </div>
+          )}
+        </label>
+      </details>
 
-      <label>
-        Text
-        {selected.editableText ? (
-          <textarea
-            className="text-control"
-            value={selected.text}
-            onChange={(event) => onText(event.target.value)}
-          />
-        ) : (
-          <div className="field-note">
-            This element wraps {selected.childElementCount} child element
-            {selected.childElementCount === 1 ? "" : "s"}. Select a leaf element to edit its text
-            directly, or use{" "}
-            <button className="link-button" onClick={onSelectParent} type="button">
-              the breadcrumb
-            </button>{" "}
-            to move around.
+      <details className="inspector-group" open>
+        <summary>Classes</summary>
+        <div className="class-editor">
+          <div className="class-chips">
+            {selected.classes.length === 0 ? <em className="muted">No classes</em> : null}
+            {selected.classes.map((name) => (
+              <span className="class-chip" key={name}>
+                {name}
+                <button aria-label={`Remove class ${name}`} onClick={() => onRemoveClass(name)} type="button">
+                  <X size={12} aria-hidden="true" />
+                </button>
+              </span>
+            ))}
           </div>
-        )}
-      </label>
-
-      <div className="class-editor">
-        <span className="field-label">Classes</span>
-        <div className="class-chips">
-          {selected.classes.length === 0 ? <em className="muted">No classes</em> : null}
-          {selected.classes.map((name) => (
-            <span className="class-chip" key={name}>
-              {name}
-              <button aria-label={`Remove class ${name}`} onClick={() => onRemoveClass(name)} type="button">
-                <X size={12} aria-hidden="true" />
-              </button>
-            </span>
-          ))}
+          <div className="class-add">
+            <input
+              aria-label="Add class"
+              placeholder="add-class"
+              value={classDraft}
+              onChange={(event) => setClassDraft(event.target.value)}
+              onKeyDown={onClassKeyDown}
+            />
+            <button onClick={submitClass} title="Add class" type="button">
+              <Plus size={15} aria-hidden="true" />
+            </button>
+          </div>
         </div>
-        <div className="class-add">
-          <input
-            aria-label="Add class"
-            placeholder="add-class"
-            value={classDraft}
-            onChange={(event) => setClassDraft(event.target.value)}
-            onKeyDown={onClassKeyDown}
-          />
-          <button onClick={submitClass} title="Add class" type="button">
-            <Plus size={15} aria-hidden="true" />
-          </button>
-        </div>
-      </div>
+      </details>
 
       {selected.isImage ? (
-        <div className="image-editor">
-          <span className="field-label">Image source</span>
-          <div className="image-row">
+        <details className="inspector-group" open>
+          <summary>Image</summary>
+          <div className="image-editor">
+            <div className="image-row">
+              <input
+                aria-label="Image URL"
+                placeholder="https:// or data:"
+                value={imageUrl}
+                onChange={(event) => setImageUrl(event.target.value)}
+                onKeyDown={(event) => event.key === "Enter" && onReplaceImage(imageUrl)}
+              />
+              <button onClick={() => onReplaceImage(imageUrl)} title="Apply image URL" type="button">
+                Set
+              </button>
+            </div>
             <input
-              aria-label="Image URL"
-              placeholder="https:// or data:"
-              value={imageUrl}
-              onChange={(event) => setImageUrl(event.target.value)}
-              onKeyDown={(event) => event.key === "Enter" && onReplaceImage(imageUrl)}
+              ref={imageFileRef}
+              accept="image/*"
+              className="file-input"
+              onChange={onImageFile}
+              type="file"
             />
-            <button onClick={() => onReplaceImage(imageUrl)} title="Apply image URL" type="button">
-              Set
+            <button className="image-upload" onClick={() => imageFileRef.current?.click()} type="button">
+              <ImageUp size={15} aria-hidden="true" />
+              Replace from file
             </button>
           </div>
-          <input
-            ref={imageFileRef}
-            accept="image/*"
-            className="file-input"
-            onChange={onImageFile}
-            type="file"
-          />
-          <button className="image-upload" onClick={() => imageFileRef.current?.click()} type="button">
-            <ImageUp size={15} aria-hidden="true" />
-            Replace from file
-          </button>
-        </div>
+        </details>
       ) : null}
 
-      <div className="field-grid">
-        <ColorField
-          label="Text color"
-          value={selected.styles.color}
-          swatchFallback="#1f2933"
-          onChange={(value) => onStyle({ color: value })}
-        />
-        <ColorField
-          label="Fill"
-          value={selected.styles.backgroundColor}
-          swatchFallback="#ffffff"
-          onChange={(value) => onStyle({ backgroundColor: value })}
-        />
-        <label>
-          Font size
-          <input
-            min="8"
-            max="180"
-            type="number"
-            value={numberFromCss(selected.styles.fontSize, "16")}
-            onChange={(event) => onStyle({ fontSize: `${event.target.value}px` })}
+      <details className="inspector-group" open>
+        <summary>Style</summary>
+        <div className="field-grid">
+          <ColorField
+            label="Text color"
+            value={selected.styles.color}
+            swatchFallback="#1f2933"
+            onChange={(value) => onStyle({ color: value })}
           />
-        </label>
-        <label>
-          Radius
-          <input
-            min="0"
-            max="80"
-            type="number"
-            value={numberFromCss(selected.styles.borderRadius, "0")}
-            onChange={(event) => onStyle({ borderRadius: `${event.target.value}px` })}
+          <ColorField
+            label="Fill"
+            value={selected.styles.backgroundColor}
+            swatchFallback="#ffffff"
+            onChange={(value) => onStyle({ backgroundColor: value })}
           />
-        </label>
-      </div>
+          <label>
+            Font size
+            <input
+              min="8"
+              max="180"
+              type="number"
+              value={numberFromCss(selected.styles.fontSize, "16")}
+              onChange={(event) => onStyle({ fontSize: `${event.target.value}px` })}
+            />
+          </label>
+          <label>
+            Radius
+            <input
+              min="0"
+              max="80"
+              type="number"
+              value={numberFromCss(selected.styles.borderRadius, "0")}
+              onChange={(event) => onStyle({ borderRadius: `${event.target.value}px` })}
+            />
+          </label>
+        </div>
 
-      <div className="align-row" aria-label="Text alignment">
-        {alignButtons.map(({ label, value, icon: Icon }) => (
-          <button
-            aria-label={label}
-            aria-pressed={selected.styles.textAlign === value}
-            className={selected.styles.textAlign === value ? "is-active" : ""}
-            key={value}
-            onClick={() => onStyle({ textAlign: value })}
-            title={label}
-            type="button"
-          >
-            <Icon size={17} aria-hidden="true" />
+        <div className="align-row" aria-label="Text alignment">
+          {alignButtons.map(({ label, value, icon: Icon }) => (
+            <button
+              aria-label={label}
+              aria-pressed={selected.styles.textAlign === value}
+              className={selected.styles.textAlign === value ? "is-active" : ""}
+              key={value}
+              onClick={() => onStyle({ textAlign: value })}
+              title={label}
+              type="button"
+            >
+              <Icon size={17} aria-hidden="true" />
+            </button>
+          ))}
+        </div>
+      </details>
+
+      <details className="inspector-group" open>
+        <summary>Layout</summary>
+        <div className="field-stack">
+          <label>
+            Padding
+            <input
+              value={selected.styles.padding}
+              onChange={(event) => onStyle({ padding: event.target.value })}
+            />
+          </label>
+          <label>
+            Margin
+            <input
+              value={selected.styles.margin}
+              onChange={(event) => onStyle({ margin: event.target.value })}
+            />
+          </label>
+          <label>
+            Width
+            <input
+              value={selected.styles.width}
+              onChange={(event) => onStyle({ width: event.target.value })}
+            />
+          </label>
+          <label>
+            Height
+            <input
+              value={selected.styles.height}
+              onChange={(event) => onStyle({ height: event.target.value })}
+            />
+          </label>
+        </div>
+
+        <div className="nudge-grid" aria-label="Move controls">
+          <button type="button" onClick={() => onNudge(0, -8)}>
+            Up
           </button>
-        ))}
-      </div>
-
-      <div className="field-stack">
-        <label>
-          Padding
-          <input
-            value={selected.styles.padding}
-            onChange={(event) => onStyle({ padding: event.target.value })}
-          />
-        </label>
-        <label>
-          Margin
-          <input
-            value={selected.styles.margin}
-            onChange={(event) => onStyle({ margin: event.target.value })}
-          />
-        </label>
-        <label>
-          Width
-          <input
-            value={selected.styles.width}
-            onChange={(event) => onStyle({ width: event.target.value })}
-          />
-        </label>
-        <label>
-          Height
-          <input
-            value={selected.styles.height}
-            onChange={(event) => onStyle({ height: event.target.value })}
-          />
-        </label>
-      </div>
-
-      <div className="nudge-grid" aria-label="Move controls">
-        <button type="button" onClick={() => onNudge(0, -8)}>
-          Up
-        </button>
-        <button type="button" onClick={() => onNudge(-8, 0)}>
-          Left
-        </button>
-        <button type="button" onClick={() => onNudge(8, 0)}>
-          Right
-        </button>
-        <button type="button" onClick={() => onNudge(0, 8)}>
-          Down
-        </button>
-      </div>
+          <button type="button" onClick={() => onNudge(-8, 0)}>
+            Left
+          </button>
+          <button type="button" onClick={() => onNudge(8, 0)}>
+            Right
+          </button>
+          <button type="button" onClick={() => onNudge(0, 8)}>
+            Down
+          </button>
+        </div>
+      </details>
 
       <div className="inspector-actions">
         <button type="button" onClick={onSelectParent} title="Select parent element">
@@ -339,6 +330,7 @@ export function InspectorEmpty() {
     <div className="empty-state">
       <MousePointer2 size={28} aria-hidden="true" />
       <span>No element selected</span>
+      <small>Click any element in the canvas to inspect and style it.</small>
     </div>
   );
 }

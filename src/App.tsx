@@ -1,3 +1,4 @@
+import { ChevronRight } from "lucide-react";
 import { type ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
 import { DataPanel } from "./components/DataPanel";
 import { DeckTimeline } from "./components/DeckTimeline";
@@ -33,13 +34,32 @@ type PreviewStatus = {
 
 type SidePanel = "inspect" | "data";
 
+type Toast = {
+  id: number;
+  message: string;
+};
+
+type DraftPrompt = {
+  html: string;
+  savedAt: number;
+};
+
 const DRAFT_KEY = "cosmic-canvas-draft";
 
 const viewportLabels: Record<Viewport, string> = {
   desktop: "Desktop",
-  tablet: "Tablet",
-  mobile: "Mobile",
+  tablet: "Tablet · 820px",
+  mobile: "Mobile · 390px",
 };
+
+const modeLabels: Record<EditorMode, string> = {
+  text: "Text",
+  select: "Select",
+  move: "Move",
+  preview: "Preview",
+};
+
+const modeOrder: EditorMode[] = ["text", "select", "move", "preview"];
 
 const supportsFileSystemAccess =
   typeof window !== "undefined" && typeof (window as any).showSaveFilePicker === "function";
@@ -60,8 +80,10 @@ export default function App() {
   const sourceHtmlRef = useRef(initialHtml);
   const lastScrollRef = useRef({ x: 0, y: 0 });
   const pendingScrollRef = useRef<{ x: number; y: number } | null>(null);
+  const toastIdRef = useRef(0);
 
   const [sourceHtml, setSourceHtml] = useState(initialHtml);
+  const [appliedHtml, setAppliedHtml] = useState(initialHtml);
   const [frameHtml, setFrameHtml] = useState(() => prepareEditableHtml(initialHtml));
   const [selected, setSelected] = useState<SelectedElement | null>(null);
   const [mode, setMode] = useState<EditorMode>("text");
@@ -79,19 +101,28 @@ export default function App() {
     bodyTextStart: "",
   });
   const [historyState, setHistoryState] = useState<HistoryState>(historyRef.current);
-  const [clipboardState, setClipboardState] = useState("Copy");
-  const [saveLabel, setSaveLabel] = useState("Save");
+  const [toasts, setToasts] = useState<Toast[]>([]);
+  const [draftPrompt, setDraftPrompt] = useState<DraftPrompt | null>(null);
 
   sourceHtmlRef.current = sourceHtml;
 
   const canUndo = historyState.index > 0;
   const canRedo = historyState.index < historyState.stack.length - 1;
+  const sourceDirty = sourceHtml !== appliedHtml;
   const activeSlideIndex = Math.max(
     0,
     deckSlides.findIndex((slide) => slide.id === activeSlideId),
   );
   const dataText = useMemo(() => serializeDataRows(dataRows), [dataRows]);
   const dataColumnCount = Math.max(1, dataRows[0]?.length ?? 1);
+
+  function showToast(message: string) {
+    const id = ++toastIdRef.current;
+    setToasts((current) => [...current, { id, message }]);
+    window.setTimeout(() => {
+      setToasts((current) => current.filter((toast) => toast.id !== id));
+    }, 2400);
+  }
 
   function syncHistoryState(next: HistoryState) {
     historyRef.current = next;
@@ -118,6 +149,7 @@ export default function App() {
     setPreviewStatus({ state: "loading", title: "", bodyTextStart: "" });
     setDeckSlides([]);
     setActiveSlideId("");
+    setAppliedHtml(html);
     setFrameHtml(prepareEditableHtml(html, trustedScripts));
     setSelected(null);
   }
@@ -128,6 +160,10 @@ export default function App() {
     setSourceHtml(clean);
     renderHtml(clean, trustedScripts);
     if (addToHistory) pushHistory(clean);
+  }
+
+  function applySource() {
+    loadHtml(sourceHtmlRef.current);
   }
 
   function postCommand(command: string, payload: Record<string, unknown> = {}) {
@@ -233,6 +269,7 @@ export default function App() {
         fileHandleRef.current = handle;
         const file = await handle.getFile();
         loadHtml(await file.text());
+        showToast(`Opened ${file.name}`);
         return;
       } catch (error) {
         if ((error as { name?: string })?.name === "AbortError") return;
@@ -247,12 +284,8 @@ export default function App() {
     if (!file) return;
     fileHandleRef.current = null;
     loadHtml(await file.text());
+    showToast(`Opened ${file.name}`);
     event.currentTarget.value = "";
-  }
-
-  function flashSave() {
-    setSaveLabel("Saved");
-    window.setTimeout(() => setSaveLabel("Save"), 1300);
   }
 
   function downloadCleanHtml(clean: string) {
@@ -281,7 +314,7 @@ export default function App() {
         const writable = await handle.createWritable();
         await writable.write(clean);
         await writable.close();
-        flashSave();
+        showToast(`Saved to ${handle.name || "file"}`);
         return;
       } catch (error) {
         if ((error as { name?: string })?.name === "AbortError") return;
@@ -289,19 +322,40 @@ export default function App() {
       }
     }
     downloadCleanHtml(clean);
-    flashSave();
+    showToast("Downloaded HTML copy");
   }
 
   async function copyHtml() {
     const clean = cleanEditorHtml(sourceHtmlRef.current);
     await navigator.clipboard.writeText(clean);
-    setClipboardState("Copied");
-    window.setTimeout(() => setClipboardState("Copy"), 1300);
+    showToast("HTML copied to clipboard");
   }
 
   function downloadHtml() {
     downloadCleanHtml(cleanEditorHtml(sourceHtmlRef.current));
+    showToast("Downloaded HTML copy");
   }
+
+  function restoreDraft() {
+    if (!draftPrompt) return;
+    loadHtml(draftPrompt.html);
+    setDraftPrompt(null);
+    showToast("Draft restored");
+  }
+
+  function discardDraft() {
+    setDraftPrompt(null);
+    try {
+      localStorage.removeItem(DRAFT_KEY);
+    } catch {
+      // Best-effort cleanup.
+    }
+  }
+
+  // Keep the latest action callbacks reachable from the long-lived key handler
+  // without re-binding it (and without stale-closure bugs).
+  const actionsRef = useRef({ saveToFile, applySource, stepHistory, setEditorMode });
+  actionsRef.current = { saveToFile, applySource, stepHistory, setEditorMode };
 
   useEffect(() => {
     function onMessage(event: MessageEvent) {
@@ -331,6 +385,7 @@ export default function App() {
         lastScrollRef.current = { x: data.scrollX, y: data.scrollY };
         const clean = cleanEditorHtml(data.html);
         setSourceHtml(clean);
+        setAppliedHtml(clean);
         scheduleHistory(clean);
       }
     }
@@ -345,27 +400,41 @@ export default function App() {
   // Keyboard shortcuts handled at the app-shell level (focus outside the iframe).
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
+      const actions = actionsRef.current;
       const mod = event.ctrlKey || event.metaKey;
-      if (!mod) return;
       const key = event.key.toLowerCase();
 
-      if (key === "s") {
+      if (mod && key === "s") {
         event.preventDefault();
-        void saveToFile();
+        void actions.saveToFile();
+        return;
+      }
+
+      if (mod && event.key === "Enter") {
+        event.preventDefault();
+        actions.applySource();
         return;
       }
 
       const target = event.target;
       const inField =
-        target instanceof HTMLElement && target.closest("input, textarea, .cm-editor");
+        target instanceof HTMLElement &&
+        target.closest("input, textarea, select, .cm-editor, [contenteditable='true']");
       if (inField) return;
 
-      if (key === "z" && !event.shiftKey) {
+      if (mod && key === "z" && !event.shiftKey) {
         event.preventDefault();
-        stepHistory(-1);
-      } else if ((key === "z" && event.shiftKey) || key === "y") {
+        actions.stepHistory(-1);
+        return;
+      }
+      if (mod && ((key === "z" && event.shiftKey) || key === "y")) {
         event.preventDefault();
-        stepHistory(1);
+        actions.stepHistory(1);
+        return;
+      }
+
+      if (!mod && !event.altKey && /^[1-4]$/.test(event.key)) {
+        actions.setEditorMode(modeOrder[Number(event.key) - 1]);
       }
     }
 
@@ -410,10 +479,7 @@ export default function App() {
       if (!raw) return;
       const draft = JSON.parse(raw) as { html?: string; savedAt?: number };
       if (typeof draft.html !== "string" || !draft.html.trim()) return;
-      const when = draft.savedAt ? new Date(draft.savedAt).toLocaleString() : "your last session";
-      if (window.confirm(`Restore your unsaved draft from ${when}?`)) {
-        loadHtml(draft.html);
-      }
+      setDraftPrompt({ html: draft.html, savedAt: draft.savedAt ?? 0 });
     } catch {
       // Ignore malformed drafts.
     }
@@ -429,12 +495,9 @@ export default function App() {
         fileInputRef={fileInputRef}
         onOpen={openFile}
         onOpenFile={openHtmlFile}
-        onApplySource={() => loadHtml(sourceHtml)}
         onSave={saveToFile}
-        saveLabel={saveLabel}
         saveTitle={saveTitle}
         onCopy={copyHtml}
-        copyLabel={clipboardState}
         onDownload={downloadHtml}
       />
 
@@ -455,17 +518,37 @@ export default function App() {
         onViewport={setViewport}
       />
 
+      {draftPrompt ? (
+        <div className="draft-banner" role="alert">
+          <span>
+            Unsaved draft from{" "}
+            {draftPrompt.savedAt ? new Date(draftPrompt.savedAt).toLocaleString() : "your last session"}
+          </span>
+          <button className="button primary" type="button" onClick={restoreDraft}>
+            Restore
+          </button>
+          <button className="button secondary" type="button" onClick={discardDraft}>
+            Discard
+          </button>
+        </div>
+      ) : null}
+
       <section className={`workspace ${sourceVisible ? "" : "source-hidden"}`}>
         <SourcePane
           value={sourceHtml}
           onChange={setSourceHtml}
           visible={sourceVisible}
           onShow={() => setSourceVisible(true)}
+          dirty={sourceDirty}
+          onApply={applySource}
         />
 
         <section className={`preview-pane ${deckSlides.length ? "has-timeline" : ""}`} aria-label="Rendered HTML">
           <div className="pane-title">
-            <span>Canvas</span>
+            <span className="pane-title-left">
+              Canvas
+              <em className={`mode-badge mode-${mode}`}>{modeLabels[mode]}</em>
+            </span>
             <span title={previewStatus.bodyTextStart || undefined}>
               {previewStatus.state === "ready"
                 ? `${viewportLabels[viewport]} - ${previewStatus.title || "Ready"}`
@@ -480,6 +563,22 @@ export default function App() {
               title="Editable HTML preview"
             />
           </div>
+          {selected && mode !== "preview" ? (
+            <nav className="canvas-breadcrumb" aria-label="Element path">
+              {selected.ancestors.map((node, index) => (
+                <span key={node.id}>
+                  {index > 0 ? <ChevronRight size={12} aria-hidden="true" /> : null}
+                  <button
+                    className={node.id === selected.id ? "is-current" : ""}
+                    onClick={() => postCommand("select", { id: node.id })}
+                    type="button"
+                  >
+                    {node.label}
+                  </button>
+                </span>
+              ))}
+            </nav>
+          ) : null}
           {deckSlides.length ? (
             <DeckTimeline
               slides={deckSlides}
@@ -534,7 +633,6 @@ export default function App() {
               selected={selected}
               onText={updateSelectedText}
               onStyle={updateSelectedStyle}
-              onSelectAncestor={(id) => postCommand("select", { id })}
               onSelectParent={() => postCommand("select-parent")}
               onAddClass={(name) => postCommand("set-class", { className: name, action: "add" })}
               onRemoveClass={(name) => postCommand("set-class", { className: name, action: "remove" })}
@@ -548,6 +646,16 @@ export default function App() {
           )}
         </aside>
       </section>
+
+      {toasts.length ? (
+        <div className="toast-stack" aria-live="polite">
+          {toasts.map((toast) => (
+            <div className="toast" key={toast.id}>
+              {toast.message}
+            </div>
+          ))}
+        </div>
+      ) : null}
     </main>
   );
 }

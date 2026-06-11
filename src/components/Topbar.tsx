@@ -1,16 +1,13 @@
-import { Copy, Download, FileCode2, RefreshCcw, Save } from "lucide-react";
-import { type ChangeEvent, type RefObject } from "react";
+import { ChevronDown, Copy, Download, FileCode2, Save } from "lucide-react";
+import { type ChangeEvent, type RefObject, useEffect, useRef, useState } from "react";
 
 type TopbarProps = {
   fileInputRef: RefObject<HTMLInputElement>;
   onOpen: () => void;
   onOpenFile: (event: ChangeEvent<HTMLInputElement>) => void;
-  onApplySource: () => void;
   onSave: () => void;
-  saveLabel: string;
   saveTitle: string;
   onCopy: () => void;
-  copyLabel: string;
   onDownload: () => void;
 };
 
@@ -18,24 +15,32 @@ export function Topbar({
   fileInputRef,
   onOpen,
   onOpenFile,
-  onApplySource,
   onSave,
-  saveLabel,
   saveTitle,
   onCopy,
-  copyLabel,
   onDownload,
 }: TopbarProps) {
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    function onPointerDown(event: PointerEvent) {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        setMenuOpen(false);
+      }
+    }
+    document.addEventListener("pointerdown", onPointerDown);
+    return () => document.removeEventListener("pointerdown", onPointerDown);
+  }, [menuOpen]);
+
   return (
     <header className="topbar">
       <div className="brand">
         <div className="brand-mark">
           <img alt="" src="/app-icon-space-192.png" />
         </div>
-        <div>
-          <h1>Cosmic Canvas</h1>
-          <p>Launch HTML from rough draft to polished page.</p>
-        </div>
+        <h1>Cosmic Canvas</h1>
       </div>
       <div className="topbar-actions">
         <input
@@ -49,22 +54,47 @@ export function Topbar({
           <FileCode2 size={17} aria-hidden="true" />
           Open file
         </button>
-        <button className="button secondary" type="button" onClick={onApplySource}>
-          <RefreshCcw size={17} aria-hidden="true" />
-          Apply source
-        </button>
-        <button className="button secondary" type="button" onClick={onSave} title={saveTitle}>
-          <Save size={17} aria-hidden="true" />
-          {saveLabel}
-        </button>
-        <button className="button" type="button" onClick={onCopy}>
-          <Copy size={17} aria-hidden="true" />
-          {copyLabel}
-        </button>
-        <button className="button primary" type="button" onClick={onDownload}>
-          <Download size={17} aria-hidden="true" />
-          Download
-        </button>
+        <div className="export-group" ref={menuRef}>
+          <button className="button primary" type="button" onClick={onSave} title={saveTitle}>
+            <Save size={17} aria-hidden="true" />
+            Save
+          </button>
+          <button
+            aria-expanded={menuOpen}
+            aria-label="More export options"
+            className="button primary menu-toggle"
+            onClick={() => setMenuOpen((open) => !open)}
+            type="button"
+          >
+            <ChevronDown size={16} aria-hidden="true" />
+          </button>
+          {menuOpen ? (
+            <div className="export-menu" role="menu">
+              <button
+                role="menuitem"
+                type="button"
+                onClick={() => {
+                  setMenuOpen(false);
+                  onCopy();
+                }}
+              >
+                <Copy size={15} aria-hidden="true" />
+                Copy HTML
+              </button>
+              <button
+                role="menuitem"
+                type="button"
+                onClick={() => {
+                  setMenuOpen(false);
+                  onDownload();
+                }}
+              >
+                <Download size={15} aria-hidden="true" />
+                Download copy
+              </button>
+            </div>
+          ) : null}
+        </div>
       </div>
     </header>
   );

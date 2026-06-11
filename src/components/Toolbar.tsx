@@ -70,13 +70,13 @@ export function Toolbar({
   return (
     <section className="toolbar" aria-label="Editor toolbar">
       <div className="segmented" aria-label="Edit mode">
-        {modeButtons.map(({ mode: buttonMode, label, icon: Icon }) => (
+        {modeButtons.map(({ mode: buttonMode, label, icon: Icon }, index) => (
           <button
             aria-pressed={mode === buttonMode}
             className={mode === buttonMode ? "is-active" : ""}
             key={buttonMode}
             onClick={() => onMode(buttonMode)}
-            title={`${label} mode`}
+            title={`${label} mode (${index + 1})`}
             type="button"
           >
             <Icon size={16} aria-hidden="true" />
@@ -114,7 +114,7 @@ export function Toolbar({
       </button>
 
       <label
-        className="script-toggle"
+        className={`script-toggle ${runTrustedScripts ? "is-on" : ""}`}
         title="Run pasted scripts and inline handlers in the preview. Use only for HTML you trust."
       >
         <input

@@ -131,6 +131,60 @@ const EDITOR_STYLE = `
   [data-wysiwyg-current-slide="true"] {
     box-shadow: 0 0 0 4px rgba(15, 118, 110, 0.28) !important;
   }
+
+  html[data-wysiwyg-mode="select"] body,
+  html[data-wysiwyg-mode="select"] body * {
+    cursor: default !important;
+  }
+
+  html[data-wysiwyg-mode="move"] body,
+  html[data-wysiwyg-mode="move"] body * {
+    cursor: grab !important;
+  }
+
+  .wysiwyg-chip {
+    position: absolute;
+    z-index: 2147483647;
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    padding: 3px 4px 3px 9px;
+    border-radius: 7px;
+    background: #1f2933;
+    color: #ffffff;
+    font: 700 11px/1 Inter, ui-sans-serif, system-ui, sans-serif;
+    box-shadow: 0 6px 18px rgba(31, 41, 51, 0.35);
+    cursor: default !important;
+  }
+
+  .wysiwyg-chip > span {
+    margin-right: 5px;
+    letter-spacing: 0.02em;
+  }
+
+  .wysiwyg-chip button {
+    width: 21px;
+    height: 21px;
+    display: grid;
+    place-items: center;
+    padding: 0;
+    border: 0;
+    border-radius: 5px;
+    background: transparent;
+    color: #cbd2d9;
+    font-size: 12px;
+    line-height: 1;
+    cursor: pointer !important;
+  }
+
+  .wysiwyg-chip button:hover {
+    background: #323f4b;
+    color: #ffffff;
+  }
+
+  .wysiwyg-chip button.danger:hover {
+    background: #7f2a1d;
+  }
 `;
 
 const EDITOR_SCRIPT = String.raw`
@@ -295,7 +349,52 @@ const EDITOR_SCRIPT = String.raw`
     return trail;
   }
 
+  let chip = null;
+  let chipLabel = null;
+
+  function ensureChip() {
+    if (chip) return chip;
+    chip = document.createElement("div");
+    chip.className = "wysiwyg-chip";
+    chip.dataset.wysiwygEditor = "true";
+    chipLabel = document.createElement("span");
+    chip.append(chipLabel);
+    const addButton = (text, title, onClick, danger) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.textContent = text;
+      button.title = title;
+      if (danger) button.className = "danger";
+      button.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        onClick();
+      });
+      chip.append(button);
+    };
+    addButton("↖", "Select parent", selectParent, false);
+    addButton("⧉", "Duplicate", duplicateSelected, false);
+    addButton("✕", "Delete", deleteSelected, true);
+    document.body.append(chip);
+    return chip;
+  }
+
+  function updateChip() {
+    if (!selectedElement || mode === "preview" || !document.body.contains(selectedElement)) {
+      if (chip) chip.style.display = "none";
+      return;
+    }
+    ensureChip();
+    if (!document.body.contains(chip)) document.body.append(chip);
+    chipLabel.textContent = elementLabel(selectedElement);
+    chip.style.display = "flex";
+    const rect = selectedElement.getBoundingClientRect();
+    chip.style.top = Math.max(window.scrollY + 4, rect.top + window.scrollY - 30) + "px";
+    chip.style.left = Math.max(4, rect.left + window.scrollX) + "px";
+  }
+
   function publishSelected() {
+    updateChip();
     if (!selectedElement) {
       post("wysiwyg-selection", { selected: null });
       return;
@@ -748,6 +847,7 @@ const EDITOR_SCRIPT = String.raw`
 
     if (data.command === "set-mode") {
       mode = data.mode || "text";
+      document.documentElement.setAttribute("data-wysiwyg-mode", mode);
       if (mode !== "text") restoreContentEditable(selectedElement);
       if (mode === "text" && selectedElement) makeEditable(selectedElement);
       publishSelected();
@@ -774,9 +874,16 @@ const EDITOR_SCRIPT = String.raw`
     if (data.command === "request-html") publishChange("request");
   });
 
-  window.addEventListener("scroll", scheduleDeckPublish, true);
-  window.addEventListener("resize", scheduleDeckPublish);
+  window.addEventListener("scroll", () => {
+    scheduleDeckPublish();
+    updateChip();
+  }, true);
+  window.addEventListener("resize", () => {
+    scheduleDeckPublish();
+    updateChip();
+  });
 
+  document.documentElement.setAttribute("data-wysiwyg-mode", mode);
   post("wysiwyg-ready", {
     title: document.title || "",
     bodyTextStart: (document.body ? document.body.textContent || "" : "").trim().slice(0, 180)
